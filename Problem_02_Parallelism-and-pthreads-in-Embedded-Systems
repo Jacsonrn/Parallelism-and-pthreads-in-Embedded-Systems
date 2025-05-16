@@ -1,0 +1,57 @@
+#include <iostream>
+#include <pthread.h>
+#include <ctime>
+
+using namespace std;
+
+#define N 100000000  // número de termos da série de Leibniz
+#define T 4          // número de threads (ajustado para Raspberry Pi 2)
+
+double pi = 0.0;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+void* calculate_pi(void* id) {
+    int my_id = (int)(long)id;
+
+    int length_per_thread = N / T;
+    int start = my_id * length_per_thread;
+    int end = start + length_per_thread;
+
+    double local_sum = 0.0;
+    double factor = (start % 2 == 0) ? 1.0 : -1.0;
+
+    for (int i = start; i < end; i++, factor = -factor) {
+        local_sum += factor / (2 * i + 1);
+    }
+
+    // Região crítica ocorre só uma vez por thread
+    pthread_mutex_lock(&lock);
+        pi += local_sum;
+    pthread_mutex_unlock(&lock);
+
+    return NULL;
+}
+
+int main() {
+    pthread_t tid[T];
+
+    clock_t tstart = clock();
+
+    for (int i = 0; i < T; i++) {
+        pthread_create(&tid[i], NULL, calculate_pi, (void*)(long)i);
+    }
+
+    for (int i = 0; i < T; i++) {
+        pthread_join(tid[i], NULL);
+    }
+
+    clock_t tend = clock();
+    double elapsed = (double)(tend - tstart) / CLOCKS_PER_SEC;
+
+    cout.precision(12);
+    cout << fixed;
+    cout << "PI estimate: " << 4 * pi << endl;
+    cout << "Time: " << elapsed << " seconds" << endl;
+
+    return 0;
+}
